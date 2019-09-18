@@ -10,7 +10,15 @@ import sys
 import pandas as pd
 from multiprocessing.pool import Pool
 
+
+import pulsar
+client = pulsar.Client('pulsar://pulsar.rc.com:6650')
+producer = client.create_producer('my-topic')
+
 def check_and_delete_video_file(str_videoFile_path:str):
+    pass
+
+def check_and_delete_video_file1(str_videoFile_path:str):
     if os.path.exists(str_videoFile_path):
         print("delte the video file", '\t', str_videoFile_path)
         os.system("rm {}".format(str_videoFile_path))
@@ -19,8 +27,7 @@ def check_and_delete_video_file(str_videoFile_path:str):
 
 #os.system(u"ffmpeg -i video_name -vf fps=1/3 no_ext_%05d.jpg".replace('video_name', video_name_new).replace('no_ext', video_name_no_ext))
 def extract_picture(str_videoFile_path:str, str_pic_path:str):
-    
-    vidcap = cv.VideoCapture(str_videoFile_path, )
+    vidcap = cv.VideoCapture(str_videoFile_path)
     success,image = vidcap.read()
     if not success:
         print("Error: failed in capture a video", '\t', str_videoFile_path)
@@ -41,25 +48,42 @@ def extract_picture(str_videoFile_path:str, str_pic_path:str):
         os.sytem("Error fps ==0 or total_f == 0 {} {}' >> failed_info.log".format('\t', str_videoFile_path))
         return
 
-    desire_list = list(range(0, total_f, fps * 3))
+    desire_list = list(range(0, total_f, fps * 3000))
+
+    print("total desired frame", '\t', len(desire_list))
     desire_list = set(desire_list)
     
     index = 1
     os.chdir(str_pic_path)
 
+
+    #     success, image = video.read()
+    #     # check if the file has read to the end
+    #     if not success:
+    #         break
+    #     # convert the image png
+    #     ret, jpeg = cv2.imencode('.png', image)
+    #     # Convert the image to bytes and send to kafka
+    #     producer.send(topic, jpeg.tobytes())
+
+
     if int(vidcap.get(cv.CAP_PROP_FOURCC)) != 27:
         for i in desire_list:
-            vidcap.set(1,i-1)     
+            vidcap.set(1,i-1)
             success,image = vidcap.read(1)         # image is an array of array of [R,G,B] values
 
             if not success:
                 print("warning: \t error in reading video")
-            frameId = vidcap.get(1)                # The 0th frame is often a throw-away
+            # frameId = vidcap.get(1)                # get the current frame position
 
             save_name = str(index).rjust(5, '0')
 
             # 这里用producer实现
-            cv.imwrite("./{}.jpg".format(save_name), image)
+            #cv.imwrite("./{}.jpg".format(save_name), image)
+            # Convert the image to bytes and send to kafka
+
+            producer.send(topic, image.tobytes())
+
             index = index + 1
             
         check_and_delete_video_file(str_videoFile_path)
@@ -110,7 +134,7 @@ def download_file(line:str, path_abs:str):
 #     extract_picture(str_videoFile_path)
 
 
-# line = 6282691
+# line_s = 6282691
 def process_one_video(line_s):
     try:
         str_pic_path = osp.join('/devdata/videos/long_video_pic/' , str(line_s))
@@ -120,6 +144,7 @@ def process_one_video(line_s):
             str_vid = str(line_s)
 
             str_videoFile_path = download_file(str_vid, '/tmp')
+
             extract_picture(str_videoFile_path, str_pic_path)
 
         else:
